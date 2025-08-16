@@ -1,19 +1,18 @@
 ﻿using password_manager.tcp_modules.interfaces;
 using System.Net;
 using System.Net.Sockets;
+using System.Buffers;
 
 namespace password_manager.tcp_modules.modules
 {
     public class connection(IPAddress _ip, int _port, int id, TcpClient tcp_client) : i_connection
     {
-        private byte[] buffer = new byte[tcp_client.ReceiveBufferSize];
-
+        private readonly TcpClient tcp_client = tcp_client;
+        private readonly byte[] buffer = ArrayPool<byte>.Shared.Rent(tcp_client.ReceiveBufferSize);
         private bool _disposed = false;
 
         public int net_id => id;
-
         public IPAddress ip => _ip;
-
         public int port => _port;
 
         public NetworkStream stream => tcp_client.GetStream();
@@ -28,8 +27,11 @@ namespace password_manager.tcp_modules.modules
 
         public void disconnect()
         {
+            if (_disposed) return;
             _disposed = true;
-            tcp_client.Dispose();
+
+            try { tcp_client.Close(); } catch { }
+            ArrayPool<byte>.Shared.Return(buffer, true);
         }
 
         public bool is_connected() => !_disposed;

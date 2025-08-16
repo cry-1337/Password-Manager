@@ -9,28 +9,24 @@ namespace password_manager.server.network
     public class listener
     {
         private readonly TcpListener tcp_listener;
-
-        private object locker;
-
+        private readonly object locker = new();
         private readonly i_netid_manager netid_manager;
         private readonly i_packet_handler packet_handler;
-        private readonly ConcurrentDictionary<int, i_connection> clients;
+        private readonly ConcurrentDictionary<int, i_connection> clients = new();
 
         public listener(IPAddress ip, int port, i_netid_manager inetid, i_packet_handler packet_handler)
         {
-            clients = new();
-            locker = new();
             netid_manager = inetid;
-            this.packet_handler = packet_handler;
-
             tcp_listener = new(ip, port);
+
+            this.packet_handler = packet_handler;
 
             Console.WriteLine("started server");
 
             try
             {
                 tcp_listener.Start();
-                tcp_listener.BeginAcceptTcpClient(accept_tcp_client, tcp_listener);
+                accept_loop();
             }
             catch (Exception ex)
             {
@@ -38,18 +34,20 @@ namespace password_manager.server.network
             }
         }
 
-        private void accept_tcp_client(IAsyncResult ar)
+        private async void accept_loop()
         {
-            try
+            while (true)
             {
-                if (ar.AsyncState is not TcpListener listener) return;
-                TcpClient tcp_client = listener.EndAcceptTcpClient(ar);
-                if (tcp_client.Client.RemoteEndPoint is IPEndPoint ip_end_point) create_connection(ip_end_point, tcp_client);
-                listener.BeginAcceptTcpClient(accept_tcp_client, ar.AsyncState);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
+                try
+                {
+                    TcpClient tcp_client = await tcp_listener.AcceptTcpClientAsync();
+                    if (tcp_client.Client.RemoteEndPoint is IPEndPoint ip_end_point)
+                        create_connection(ip_end_point, tcp_client);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex);
+                }
             }
         }
 
@@ -75,13 +73,11 @@ namespace password_manager.server.network
                 if (ar.AsyncState is not i_connection connection) return;
 
                 int size = 0;
+                try { size = connection.end_read(ar); } catch { connection.Dispose(); return; }
 
-                try
+                if (size == 0)
                 {
-                    size = connection.end_read(ar);
-                }
-                catch
-                {
+                    connection.Dispose();
                     return;
                 }
 
@@ -100,6 +96,7 @@ namespace password_manager.server.network
             }
         }
 
-        private void handle_client_connection(i_connection connection, pending packet) => packet_handler.handle(connection, packet);
+        private void handle_client_connection(i_connection connection, pending packet)
+            => packet_handler.handle(connection, packet);
     }
 }
