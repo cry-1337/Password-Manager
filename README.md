@@ -28,7 +28,7 @@
 
 ## 🔹 How to Run
 1. Clone the repository:  
-   ```git clone https://github.com/cry-1337/Password-Manager.git```
+```git clone https://github.com/cry-1337/Password-Manager.git```
 2. Open the solution in Visual Studio.
 3. Build the project and start the server.
 4. Launch the client app and server app.
